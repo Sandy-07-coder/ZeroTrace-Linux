@@ -43,8 +43,8 @@ Options:
   --help       Show this help message and exit.
 
 Description:
-  Cleans /tmp, /var/tmp, ~/.cache, Chrome/Chromium session artefacts,
-  Firefox session artefacts, and flushes the system DNS cache.
+  Cleans /tmp, /var/tmp, Chrome/Chromium session artefacts, and
+  Firefox session artefacts.
   Processes holding target files are gracefully terminated (SIGTERM → SIGKILL).
   Protected system processes (systemd, Xorg, etc.) are never signalled.
 EOF
@@ -109,12 +109,6 @@ clean_rmrf_target "/tmp" "tmp"
 log_info "▶ Cleaning /var/tmp ..."
 clean_rmrf_target "/var/tmp" "var_tmp"
 
-# ===========================================================================
-# STEP 2: Clean ~/.cache (rm -rf — generic non-sensitive cache data)
-# Only browser artefacts (cookies, history, form data) are shredded later.
-# ===========================================================================
-log_info "▶ Cleaning ~/.cache ..."
-clean_rmrf_target "${HOME}/.cache" "user_cache"
 
 # ===========================================================================
 # STEP 3: Chrome / Chromium browser artefacts
@@ -146,34 +140,6 @@ else
     clean_shred_file_list "firefox" "${firefox_files[@]}"
 fi
 
-# ===========================================================================
-# STEP 5: DNS cache flush
-# ===========================================================================
-log_info "▶ Flushing DNS cache ..."
-
-if [[ "${DRY_RUN}" == "true" ]]; then
-    DNS_FLUSH_RESULT="[dry-run] Would run: sudo resolvectl flush-caches"
-    log_verbose "  ${DNS_FLUSH_RESULT}"
-elif command -v resolvectl &>/dev/null; then
-    if sudo resolvectl flush-caches 2>/dev/null; then
-        DNS_FLUSH_RESULT="✓ resolvectl flush-caches — success"
-        log_verbose "  ${DNS_FLUSH_RESULT}"
-    else
-        DNS_FLUSH_RESULT="⚠  resolvectl flush-caches — failed (permission denied?)"
-        log_warn "  ${DNS_FLUSH_RESULT}"
-    fi
-elif command -v systemd-resolve &>/dev/null; then
-    if sudo systemd-resolve --flush-caches 2>/dev/null; then
-        DNS_FLUSH_RESULT="✓ systemd-resolve --flush-caches — success (fallback)"
-        log_verbose "  ${DNS_FLUSH_RESULT}"
-    else
-        DNS_FLUSH_RESULT="⚠  systemd-resolve --flush-caches — failed"
-        log_warn "  ${DNS_FLUSH_RESULT}"
-    fi
-else
-    DNS_FLUSH_RESULT="⚠  Neither resolvectl nor systemd-resolve found — DNS cache not flushed"
-    log_warn "  ${DNS_FLUSH_RESULT}"
-fi
 
 # ===========================================================================
 # Final report

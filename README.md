@@ -1,6 +1,6 @@
 # ZeroTrace — Session Sanitizer (Phase 1)
 
-**ZeroTrace** is a Bash-based CLI tool that sanitizes leftover session data on shared Ubuntu machines (college labs, cyber cafés). It targets specific known-leaky locations — temp directories, user cache, browser artefacts, and DNS cache — and produces a clear report of exactly what was cleaned.
+**ZeroTrace** is a Bash-based CLI tool that sanitizes leftover session data on shared Ubuntu machines (college labs, cyber cafés). It targets specific known-leaky locations — temp directories and browser artefacts — and produces a clear report of exactly what was cleaned.
 
 ## Why ZeroTrace?
 
@@ -55,11 +55,9 @@ zerotrace/
 | Category | Target | Method |
 |---|---|---|
 | **Temp dirs** | `/tmp`, `/var/tmp` | `rm -rf` (contents only) |
-| **User cache** | `~/.cache` (all subdirs incl. thumbnails) | `shred -u` (or zero+delete fallback) |
 | **Chrome** | `~/.config/google-chrome/Default/{Cookies,Web Data,History,…}` + `-wal`/`-shm` | `shred -u` |
 | **Chromium** | `~/.config/chromium/Default/` equivalents | `shred -u` |
 | **Firefox** | `~/.mozilla/firefox/<profile>/{cookies,formhistory,places}.sqlite` + `-wal`/`-shm` | `shred -u` |
-| **DNS cache** | `resolvectl flush-caches` (systemd-resolve fallback) | system call |
 
 - Firefox profile directories are **discovered dynamically** via `profiles.ini` — no hardcoding.
 - Missing paths are **silently skipped** (not every machine has both browsers).
@@ -111,7 +109,7 @@ Before deleting any file, ZeroTrace checks `lsof` for holding processes:
 ./zerotrace.sh
 
 # 4. Verify
-du -sh ~/.cache ~/.mozilla/firefox /tmp /var/tmp
+du -sh ~/.mozilla/firefox /tmp /var/tmp
 ls ~/.config/google-chrome/Default/Cookies 2>/dev/null || echo "✓ cleaned"
 ```
 
@@ -123,7 +121,7 @@ ls ~/.config/google-chrome/Default/Cookies 2>/dev/null || echo "✓ cleaned"
 - `bash` ≥ 4.0
 - `lsof` (for process-lock detection — gracefully skipped if missing)
 - `shred` (from GNU coreutils — zero+delete fallback used if missing)
-- `sudo` privileges (for DNS cache flush)
+
 
 ---
 

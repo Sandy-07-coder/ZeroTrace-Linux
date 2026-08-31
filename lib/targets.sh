@@ -13,10 +13,7 @@ declare -a RMRF_TARGETS=(
     "/var/tmp"
 )
 
-# Cache dirs to shred (contents only)
-declare -a SHRED_CACHE_TARGETS=(
-    "${HOME}/.cache"
-)
+
 
 # Chrome/Chromium specific files (relative to profile dir)
 declare -a CHROME_SENSITIVE_FILES=(

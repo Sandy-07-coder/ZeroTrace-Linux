@@ -53,18 +53,6 @@ log "Creating /var/tmp clutter..."
 mkdir -p /var/tmp/zerotrace_test
 dd if=/dev/urandom of="/var/tmp/zerotrace_test/var_dummy.bin" bs=1024 count=128 2>/dev/null
 
-# ---------------------------------------------------------------------------
-# 3. ~/.cache fake entries
-# ---------------------------------------------------------------------------
-log "Populating ~/.cache with fake entries..."
-
-# Generic app cache
-mkdir -p "${HOME}/.cache/zerotrace_fake_app"
-dd if=/dev/urandom of="${HOME}/.cache/zerotrace_fake_app/data.bin" bs=1024 count=32 2>/dev/null
-
-# Thumbnail-style cache
-mkdir -p "${HOME}/.cache/thumbnails/normal"
-dd if=/dev/urandom of="${HOME}/.cache/thumbnails/normal/abcdef1234567890.png" bs=512 count=2 2>/dev/null
 
 # ---------------------------------------------------------------------------
 # 4. Chrome/Chromium artefacts
@@ -138,8 +126,7 @@ if [[ "${QUIET}" == "false" ]]; then
     echo "  Created clutter in:"
     echo "    /tmp/zerotrace_test/"
     echo "    /var/tmp/zerotrace_test/"
-    echo "    ~/.cache/zerotrace_fake_app/"
-    echo "    ~/.cache/thumbnails/normal/"
+
     echo "    ~/.config/google-chrome/Default/"
     echo "    ~/.config/chromium/Default/"
     echo "    ~/.mozilla/firefox/*.default-release/"

@@ -114,11 +114,6 @@ print_report() {
         echo -e "  ${C_GREEN}✓ Nothing to clean — already clean.${C_RESET}"
     fi
 
-    # ── DNS flush ───────────────────────────────────────────────────────────
-    echo -e "\n${C_BOLD}${C_BLUE}── DNS Cache Flush ─────────────────────────────────────────${C_RESET}"
-    if [[ -n "${DNS_FLUSH_RESULT:-}" ]]; then
-        echo "  ${DNS_FLUSH_RESULT}"
-    fi
 
     # ── Process terminations ────────────────────────────────────────────────
     if [[ ${#REPORT_TERMINATIONS[@]} -gt 0 ]]; then
