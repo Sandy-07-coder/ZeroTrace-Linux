@@ -83,3 +83,11 @@ A background listener process that:
 ## Relationship to Phase 1 and Phase 3
 
 Phase 2 is a trigger + UI layer — it does not reimplement cleaning logic, it calls the Phase 1 script. Phase 3 (ephemeral encrypted storage via `tmpfs` and crypto-shredding) will eventually let the "Clean now" action become closer to instantaneous, since crypto-shredding a key is far faster than shredding files — at that point this GUI's backend call swaps from "run the Phase 1 delete script" to "destroy the Phase 3 session key," without needing to change the trigger or dialog logic.
+
+## Design Decisions & Constraints (Q&A Updates)
+
+Based on review, three critical design constraints have been explicitly agreed upon for Phase 2:
+
+1. **Switch User Behavior (The "Blind Spot"):** When a user switches sessions, the display may switch to the login screen before the user can see the GTK dialog. We will proceed anyway and rely on the 10-second countdown to automatically trigger the default "Clean Now" action if the user doesn't see or interact with the dialog.
+2. **GNOME Logout Timeout:** GNOME's session manager enforces a hard timeout (~60 seconds) for logout inhibitors. We will run the Phase 1 script synchronously and ensure it is optimized enough to finish well within this limit to prevent GNOME from forcefully killing the cleanup process mid-execution.
+3. **No Root Privileges Required:** The Phase 1 backend script (`zerotrace.sh`) explicitly checks ownership and only targets user-owned files. Therefore, the background listener and the script can safely run entirely in user-space without requiring `sudo` or `polkit` configurations, ensuring a seamless UX.
