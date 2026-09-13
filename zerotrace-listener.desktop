@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ZeroTrace Listener
+Comment=Background listener that triggers session cleanup on logout or switch-user
+Exec=python3 /home/santhosh-sandy/Documents/TS/PBL/Zero-Trace/zerotrace-listener.py
+Hidden=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Application
+NoDisplay=true
