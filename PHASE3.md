@@ -1,45 +1,93 @@
-# ZeroTrace OS — Phase 3: Ephemeral Storage & Cryptographic Erasure
+# ZeroTrace OS — Phase 3: D-Bus Session Integration (Automatic Trigger)
 
-*Scope: Linux (Ubuntu) only. (Previously labeled Phase 2, renumbered now that the logout/switch-user GUI is Phase 2.)*
+*Scope: Linux (Ubuntu, GNOME desktop) only.*
 
 ## Focus
 
-Eliminating physical SSD wear and achieving forensic-level security through memory isolation and instant key destruction. Where Phase 1 and Phase 2 clean up *after the fact* (delete files once told to), Phase 3 changes the architecture so there's nothing recoverable to delete in the first place.
+Make the Phase 2 GUI appear automatically at the moment it matters — when the user clicks **Log Out** or **Switch User** from Ubuntu's GNOME session menu. Instead of requiring a manual launch, ZeroTrace becomes a seamless part of the session lifecycle.
 
-## Dynamic Encrypted Workspace Mounting
+## Objectives
 
-- Implement a kernel-level `tmpfs` mount to store `~/.cache` and session temp data purely within volatile RAM (`mount -t tmpfs -o size=<limit> tmpfs <mountpoint>`).
-- Bind-mount or redirect the real `~/.cache` (and optionally `/tmp` for the session) onto this `tmpfs` mount at session start, so applications write to it transparently without needing to know anything changed.
-- Because `tmpfs` contents live only in RAM, they're gone the instant the mount is torn down or the system loses power — no disk write ever happens for this data, which also reduces SSD wear (the point called out in the phase focus).
+- Detect the two trigger moments: logout and switch-user.
+- Automatically launch the Phase 2 GUI dialog when either event is detected.
+- Pause the logout sequence until the user responds (or the countdown expires), then let it proceed.
+- Run as a lightweight background listener that starts with the user session.
 
-## In-Memory Ephemeral Key Lifecycle
+## Trigger Mechanisms
 
-- Generate a cryptographically secure random key on user login (`os.urandom(32)` for AES-256), held exclusively in the process memory of the ZeroTrace daemon — never written to disk, never logged.
-- Protect that memory from being paged to swap using `mlock()` (Linux) so the key itself can't leak via the same swap-based recovery attack the project set out to prevent in Phase 1's threat model.
-- Route sensitive working directories into this isolated layer: compiler build workspaces, data science cache files (e.g. Jupyter/pip caches), and browser working directories — the same categories of transient, high-value data identified in Phase 1's directory mapping.
-- If encrypting the `tmpfs` contents at rest matters for your threat model (e.g. RAM could theoretically be cold-booted), layer `dm-crypt` on a loop device backed by the `tmpfs` file, keyed with the in-memory key, rather than relying on `tmpfs` alone.
+### Logout trigger (reliable)
 
-## Crypto-Shredding Mechanism
+GNOME's session manager (`org.gnome.SessionManager` over D-Bus) supports registering an **inhibitor** that pauses the logout sequence:
 
-- On session end (triggered by the same logout/switch-user detection built in Phase 2), the daemon:
-  1. Triggers immediate zero-fill de-allocation of the in-memory key, so it's irrecoverable even via a memory dump taken moments later.
-  2. Unmounts the `tmpfs` (or `dm-crypt` volume), which discards its contents entirely since they only ever existed in RAM.
-- Because the data was encrypted (or existed only in volatile memory) the whole time, destroying the key or unmounting the RAM-backed store makes the data unrecoverable **without needing a multi-pass disk overwrite** — this is the core efficiency argument over Phase 1's `shred`-based approach: crypto-shredding is milliseconds, `shred` is proportional to file size and disk speed.
+1. Call `Inhibit()` with the `INHIBIT_LOGOUT` flag when ZeroTrace's background listener starts, registering it as a participant in the end-session negotiation.
+2. Listen for the `QueryEndSession` signal — this fires when the user clicks **Log Out**, before the session actually ends.
+3. On receiving it, launch the Phase 2 GUI dialog.
+4. Once the user responds (clean now / skip) or the countdown expires, call `EndSessionResponse()` to release the inhibitor and let the logout proceed.
+
+This is the same mechanism apps use to show "you have unsaved changes" dialogs on logout — ZeroTrace uses it for cleanup instead.
+
+### Switch-user trigger (best-effort)
+
+Ubuntu's fast user switching does **not** end the current session — it locks it in the background and starts a new login screen. There's no direct "switch user was clicked" signal. The practical approach:
+
+- Monitor `systemd-logind` for a `SessionNew` signal where the new session belongs to a **different user** than the currently active one (via `loginctl` / the `org.freedesktop.login1` D-Bus interface).
+- When detected, launch the Phase 2 GUI for the outgoing user's session, since their session is about to sit idle while someone else uses the machine.
+- **Caveat:** because the original session isn't actually ending, the display may switch to the login screen before the user can see the dialog. The 10-second countdown will auto-trigger "Clean Now" as the default, ensuring cleanup happens even if the dialog goes unseen.
+
+## Architecture
+
+```
+zerotrace-listener.py (background daemon, runs in user session)
+        │
+        ├─ Registers logout inhibitor via org.gnome.SessionManager (D-Bus)
+        ├─ Listens for QueryEndSession signal (logout)
+        ├─ Listens for SessionNew signal on org.freedesktop.login1 (switch-user)
+        │
+        ▼
+   Trigger detected
+        │
+        ▼
+Launches zerotrace-gui.py (Phase 2 GUI)
+        │
+        ├─ Clean Now → Phase 1 zerotrace.sh runs → cleanup completes
+        └─ Skip / Close → no action
+        │
+        ▼
+EndSessionResponse() called → logout/switch proceeds normally
+```
+
+## Autostart
+
+The background listener should start automatically with the GNOME session. This can be done via:
+
+- A `.desktop` file in `~/.config/autostart/` pointing to `zerotrace-listener.py`.
+- The `X-GNOME-Autostart-enabled=true` key ensures it launches on login.
+
+## Design Constraints
+
+1. **GNOME Logout Timeout:** GNOME's session manager enforces a hard timeout (~60 seconds) for logout inhibitors. The Phase 1 script must finish within this limit, otherwise GNOME will forcefully kill the process mid-cleanup.
+2. **Switch-User Blind Spot:** The display may switch away before the user sees the dialog. The countdown auto-clean default handles this — cleanup fires automatically after 10 seconds if no interaction occurs.
+3. **No Root Privileges:** The listener, GUI, and cleaning script all run in user-space. No `sudo` or `polkit` needed.
 
 ## Milestone Deliverable
 
-A zero-touch storage architecture where:
-- Session data (cache, temp, routed workspace directories) is isolated inside an ephemeral, RAM-backed (and optionally encrypted) mount from the moment the session starts.
-- On session end, the mount is invalidated and the key destroyed within milliseconds — no user interaction and no slow disk-wipe pass required.
-- The Phase 2 GUI's "Clean now" action, when this phase is active, becomes a near-instant key-destruction call instead of a file-deletion pass.
+A background listener process (`zerotrace-listener.py`) that:
+
+- Registers itself with GNOME's session manager and correctly intercepts a real logout click, pausing it until the user responds.
+- Detects switch-user events on a best-effort basis via `systemd-logind`.
+- Launches the Phase 2 GUI when a trigger fires.
+- Correctly releases the logout inhibitor in all cases (clean, skip, timeout, window closed).
+- Includes an autostart `.desktop` file for seamless session integration.
 
 ## Testing Approach
 
-- Verify via `mount` / `findmnt` that target directories are genuinely backed by `tmpfs` (or the `dm-crypt` volume) and not silently falling back to disk.
-- Confirm `mlock()` is actually preventing the key from appearing in swap: force memory pressure, then inspect swap (`swapon`, then a controlled swap dump) to confirm no key material is present.
-- Timing test: measure how long crypto-shredding takes versus how long a Phase 1 `shred`-based wipe of equivalent data takes, to substantiate the "faster and equally secure" claim in your final report.
-- Forensic verification: after unmount, attempt to recover any test data placed in the `tmpfs`/encrypted mount using standard file-recovery tools, and confirm nothing is retrievable.
+- Test in a VM with a GNOME desktop session (not headless — needs a real display).
+- Trigger a real logout from the top-right menu and confirm the GUI appears and logout pauses until the user responds.
+- Trigger a switch-user and confirm the GUI appears (or auto-cleans after countdown).
+- Let the countdown expire without clicking and confirm the default "Clean Now" action fires.
+- Close the dialog window (X button) and confirm the inhibitor is released and logout proceeds.
+- Confirm the autostart `.desktop` file works — log out and back in, and verify the listener is running.
 
 ## Relationship to Phase 1 and Phase 2
 
-Phase 1 proved *what* needs cleaning and built the deletion/lock-handling logic. Phase 2 made cleanup interactive and tied it to real logout/switch-user events. Phase 3 makes the underlying storage itself ephemeral, so the Phase 2 dialog's "Clean now" path becomes a key-destruction call rather than a deletion pass — the visible user experience from Phase 2 doesn't need to change, only what happens underneath it when confirmed.
+Phase 1 is the cleaning engine (CLI). Phase 2 is the visual interface (GUI). Phase 3 is the glue that connects the GUI to real session events — it doesn't change what gets cleaned or how the GUI looks, it just makes the GUI appear at the right moment automatically. The three phases stack: Phase 3 triggers Phase 2, which calls Phase 1.
