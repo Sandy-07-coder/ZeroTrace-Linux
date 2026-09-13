@@ -49,6 +49,35 @@ zerotrace-gui.py (GTK3 application)
         └─ Logs dialog (cleanup history viewer)
 ```
 
+## Desktop Launcher
+
+A `.desktop` file is provided so users can launch ZeroTrace from the GNOME Activities menu / app grid without opening a terminal.
+
+### File: `zerotrace.desktop`
+
+```ini
+[Desktop Entry]
+Type=Application
+Name=ZeroTrace
+Comment=Clean session traces on shared machines
+Exec=python3 /path/to/zerotrace-gui.py
+Icon=security-high
+Terminal=false
+Categories=Utility;System;
+```
+
+### Installation
+
+Copy the file to the user's local applications directory:
+
+```bash
+cp zerotrace.desktop ~/.local/share/applications/
+```
+
+After copying, ZeroTrace appears in the GNOME app grid. The user clicks the icon, the Phase 2 GUI opens, and they can clean or skip as usual.
+
+> **Note:** Update the `Exec=` path to the actual install location of `zerotrace-gui.py`. To use a custom icon instead of the system `security-high` icon, set `Icon=` to an absolute path (e.g., `Icon=/path/to/zerotrace-icon.png`).
+
 ## No Root Privileges Required
 
 The Phase 1 backend script checks ownership and only targets user-owned files. The GUI and script run entirely in user-space without requiring `sudo` or `polkit`.

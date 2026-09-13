@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ZeroTrace
+Comment=Clean session traces on shared machines
+Exec=python3 /home/santhosh-sandy/Documents/TS/PBL/Zero-Trace/zerotrace-gui.py
+Icon=security-high
+Terminal=false
+Categories=Utility;System;
