@@ -1,4 +1,4 @@
-# ZeroTrace — Session Sanitizer (Phase 1)
+# ZeroTrace OS — Session Sanitizer
 
 **ZeroTrace** is a Bash-based CLI tool that sanitizes leftover session data on shared Ubuntu machines (college labs, cyber cafés). It targets specific known-leaky locations — temp directories and browser artefacts — and produces a clear report of exactly what was cleaned.
 
@@ -16,7 +16,10 @@
 
 ```
 zerotrace/
-├── zerotrace.sh              # Main entry point / CLI
+├── zerotrace.sh              # Core backend / CLI script (Phase 1)
+├── zerotrace-gui.py          # GTK3 interactive UI (Phase 2)
+├── zerotrace-listener.py     # D-Bus background trigger daemon (Phase 3)
+├── zerotrace.desktop         # App grid launcher for the GUI
 ├── lib/
 │   ├── targets.sh            # Target path definitions + Firefox profile discovery
 │   ├── clean.sh              # Deletion routines (rm / shred wrappers)
@@ -30,6 +33,13 @@ zerotrace/
 ---
 
 ## Usage
+
+### GUI & Automatic Triggers
+ZeroTrace is deeply integrated into the GNOME session (Phase 2 & 3):
+- **Automatic Logout/Switch-User Prompt:** A background listener (`zerotrace-listener.py`) hooks into the GNOME session and systemd. When you log out or switch users, a GTK GUI will automatically prompt you to clean the session.
+- **Manual App Launcher:** You can also manually launch the ZeroTrace GUI from your application grid (requires installing `zerotrace.desktop`).
+
+### CLI Usage
 
 ```bash
 # Full clean with summary
@@ -117,10 +127,12 @@ ls ~/.config/google-chrome/Default/Cookies 2>/dev/null || echo "✓ cleaned"
 
 ## Requirements
 
-- Ubuntu / Debian-based Linux
+- Ubuntu / Debian-based Linux (GNOME desktop required for auto-triggers)
 - `bash` ≥ 4.0
 - `lsof` (for process-lock detection — gracefully skipped if missing)
 - `shred` (from GNU coreutils — zero+delete fallback used if missing)
+- `python3` & `python3-gi` (PyGObject for GTK3 GUI)
+- D-Bus and `systemd-logind` (for session lifecycle integration)
 
 
 ---
@@ -129,6 +141,6 @@ ls ~/.config/google-chrome/Default/Cookies 2>/dev/null || echo "✓ cleaned"
 
 | Phase | Status | Description |
 |---|---|---|
-| **Phase 1** | ✅ **This release** | Manual CLI sanitizer |
-| Phase 2 | 🔜 Planned | GUI logout/switch-user trigger (GTK3 dialog + systemd-logind) |
-| Phase 3 | 🔜 Planned | Cryptographic erasure via ephemeral keys + tmpfs |
+| Phase 1 | ✅ Completed | CLI-Based Session Sanitizer (Backend logic) |
+| Phase 2 | ✅ Completed | Interactive Cleanup GUI (GTK3 application) |
+| Phase 3 | ✅ Completed | D-Bus Session Integration (Automatic trigger on logout/switch-user) |
